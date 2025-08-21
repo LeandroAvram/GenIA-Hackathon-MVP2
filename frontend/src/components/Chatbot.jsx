@@ -13,6 +13,7 @@ function Chatbot() {
   const [inputText, setInputText] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false)
   const [audioBlob, setAudioBlob] = useState(null)
   const mediaRecorderRef = useRef(null)
   const audioRef = useRef(null)
@@ -38,7 +39,7 @@ function Chatbot() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: currentInput })
+        body: JSON.stringify({ question: currentInput })
       })
       
       const data = await response.json()
@@ -46,7 +47,7 @@ function Chatbot() {
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        content: data.response || 'Error en la respuesta',
+        content: data.answer || 'Error en la respuesta',
         timestamp: new Date()
       }
       setMessages(prev => [...prev, botMessage])
@@ -118,28 +119,47 @@ function Chatbot() {
     const formData = new FormData()
     formData.append('audio', audioBlob, 'recording.wav')
     
+    setIsProcessingAudio(true)
+    
     try {
-      const response = await fetch('/api/audio', {
+      const response = await fetch('/api/chat-audio', {
         method: 'POST',
         body: formData
       })
       
       const data = await response.json()
-      console.log('Audio enviado:', data)
       
-      // Mostrar mensaje de confirmación
-      const confirmMessage = {
+      // Add user message with transcript
+      const userMessage = {
         id: Date.now(),
-        type: 'bot',
-        content: `Audio recibido y guardado como: ${data.filename}`,
+        type: 'user',
+        content: data.transcript || 'Audio enviado',
         timestamp: new Date()
       }
-      setMessages(prev => [...prev, confirmMessage])
+      setMessages(prev => [...prev, userMessage])
+      
+      // Add bot response
+      const botMessage = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: data.answer || 'Error en la respuesta',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, botMessage])
       
       clearAudio()
     } catch (error) {
       console.error('Error enviando audio:', error)
+      const errorMessage = {
+        id: Date.now(),
+        type: 'bot',
+        content: 'Error procesando el audio. Intenta nuevamente.',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
     }
+    
+    setIsProcessingAudio(false)
   }
 
   return (
@@ -193,7 +213,9 @@ function Chatbot() {
             <audio ref={audioRef} />
             <button onClick={playAudio} className="play-button">▶️</button>
             <span>Audio grabado</span>
-            <button onClick={sendAudio} className="send-audio-button">📤</button>
+            <button onClick={sendAudio} className="send-audio-button" disabled={isProcessingAudio}>
+              {isProcessingAudio ? '⏳' : '📤'}
+            </button>
             <button onClick={clearAudio} className="clear-button">❌</button>
           </div>
         )}
